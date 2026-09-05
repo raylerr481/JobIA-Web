@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bell, BriefcaseBusiness, Bookmark, Check, ChevronRight, CircleCheck, ExternalLink, FileText, LayoutDashboard, MapPin, Menu, Search, Settings, Sparkles, UserRound, WandSparkles, X } from 'lucide-react';
 import { API_URL, getJobs, saveProfile, type Job, type Profile } from './api';
 import { calculateMatch, rankJobs } from './matching';
@@ -94,7 +94,7 @@ function JobDetail({ job, saved, profile, application, onClose, onToggleSaved, o
 
 function DraftField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) { return <label className="draft-field"><span>{label}</span><textarea value={value} onChange={e => onChange(e.target.value)} rows={7} /></label>; }
 function Stat({ title, value, detail }: { title: string; value: string; detail: string }) { return <div className="stat"><span>{title}</span><strong>{value}</strong><small>{detail}</small></div>; }
-function NavItem({ icon, label, active, onClick, badge }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; badge?: number }) { return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>{icon}<span>{label}</span>{badge ? <b>{badge}</b> : null}</button>; }
+function NavItem({ icon, label, active, onClick, badge }: { icon: ReactNode; label: string; active: boolean; onClick: () => void; badge?: number }) { return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>{icon}<span>{label}</span>{badge ? <b>{badge}</b> : null}</button>; }
 
 function ProfileEditor({ profile, setProfile, saved, onSave }: { profile: Profile; setProfile: (p: Profile) => void; saved: boolean; onSave: () => void }) {
   const [skills, setSkills] = useState((profile.skills ?? []).join(', '));
