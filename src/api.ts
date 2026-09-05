@@ -15,16 +15,20 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (!API_URL) throw new Error('JobIA API no configurada');
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const callerSignal = options?.signal;
+  const abortFromCaller = () => controller.abort();
+  callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
   try {
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
-      signal: options?.signal ?? controller.signal,
+      signal: controller.signal,
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
     });
     if (!response.ok) throw new Error(`JobIA API: HTTP ${response.status}`);
     return await response.json() as T;
   } finally {
     globalThis.clearTimeout(timeout);
+    callerSignal?.removeEventListener('abort', abortFromCaller);
   }
 }
 
@@ -45,17 +49,30 @@ function normalizeJobs(data: JobsResponse): Job[] {
 export async function getJobs(query = ''): Promise<{ jobs: Job[]; source: 'api' | 'demo' }> {
   if (!API_URL) return { jobs: filterDemo(query), source: 'demo' };
   try {
-    const data = await request<JobsResponse>(`/jobs${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+    const params = new URLSearchParams();
+    if (query.trim()) params.set('q', query.trim());
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    const data = await request<JobsResponse>(`/jobs${suffix}`);
     return { jobs: normalizeJobs(data), source: 'api' };
   } catch {
     return { jobs: filterDemo(query), source: 'demo' };
   }
 }
 
+export async function getProfile(email: string): Promise<Profile | null> {
+  const normalizedEmail = email.trim();
+  if (!API_URL || !normalizedEmail) return null;
+  try {
+    return await request<Profile>(`/profile?email=${encodeURIComponent(normalizedEmail)}`);
+  } catch {
+    return null;
+  }
+}
+
 export async function saveProfile(profile: Profile): Promise<boolean> {
   if (!API_URL) return true;
   try {
-    await request('/profile', { method: 'PUT', body: JSON.stringify(profile) });
+    await request<Profile>('/profile', { method: 'PUT', body: JSON.stringify(profile) });
     return true;
   } catch {
     return false;
