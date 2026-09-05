@@ -10,4 +10,4 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> { if 
 function filterDemo(query: string) { const q = query.trim().toLowerCase(); if (!q) return demoJobs; return demoJobs.filter((j) => `${j.title} ${j.company} ${j.kind} ${j.summary} ${(j.skills ?? []).join(' ')}`.toLowerCase().includes(q)); }
 export async function getJobs(query = ''): Promise<{ jobs: Job[]; source: 'api' | 'demo' }> { if (!API_URL) return { jobs: filterDemo(query), source: 'demo' }; try { const data = await request<Job[]>(`/jobs${query ? `?q=${encodeURIComponent(query)}` : ''}`); return { jobs: data, source: 'api' }; } catch { return { jobs: filterDemo(query), source: 'demo' }; } }
 export async function saveProfile(profile: Profile): Promise<boolean> { if (!API_URL) return true; try { await request('/profile', { method: 'PUT', body: JSON.stringify(profile) }); return true; } catch { return false; } }
-export { API_URL };
+export { API_URL, demoJobs };
