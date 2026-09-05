@@ -1,8 +1,10 @@
-export type Job = { id: string; title: string; company: string; location: string; modality: string; kind: string; match: number; compensation?: string; summary: string; url?: string; skills?: string[] };
+export type MatchReason = { skill: string; matched: boolean };
+export type Job = { id: string; title: string; company: string; location: string; modality: string; kind: string; match: number; compensation?: string; summary: string; url?: string; skills?: string[]; match_reasons?: MatchReason[]; strengths?: string[]; gaps?: string[] };
 export type Profile = { email: string; profession: string; mode: string; aiOpportunities: boolean; skills?: string[] };
 export type JobsResponse = Job[] | { jobs?: Job[]; data?: Job[]; results?: Job[] };
 export type JobIAContract = { name: string; module: string; specialization: string; orchestrator: string; trainer: string; clients: string[]; principle: string };
 export type JobIAStatus = { status: string; service?: string; version?: string; contract?: string; persistence?: string };
+export type ApplicationDrafts = { cvSummary: string; coverLetter: string; answers: string; notes: string };
 
 const API_URL = (import.meta.env.VITE_JOBIA_API_URL as string | undefined)?.replace(/\/$/, '');
 const REQUEST_TIMEOUT_MS = 9000;
@@ -48,11 +50,12 @@ function normalizeJobs(data: JobsResponse): Job[] {
   return [];
 }
 
-export async function getJobs(query = ''): Promise<{ jobs: Job[]; source: 'api' | 'demo' }> {
+export async function getJobs(query = '', email = ''): Promise<{ jobs: Job[]; source: 'api' | 'demo' }> {
   if (!API_URL) return { jobs: filterDemo(query), source: 'demo' };
   try {
     const params = new URLSearchParams();
     if (query.trim()) params.set('q', query.trim());
+    if (email.trim()) params.set('email', email.trim());
     const suffix = params.toString() ? `?${params.toString()}` : '';
     const data = await request<JobsResponse>(`/jobs${suffix}`);
     return { jobs: normalizeJobs(data), source: 'api' };
@@ -64,21 +67,22 @@ export async function getJobs(query = ''): Promise<{ jobs: Job[]; source: 'api' 
 export async function getProfile(email: string): Promise<Profile | null> {
   const normalizedEmail = email.trim();
   if (!API_URL || !normalizedEmail) return null;
-  try {
-    return await request<Profile>(`/profile?email=${encodeURIComponent(normalizedEmail)}`);
-  } catch {
-    return null;
-  }
+  try { return await request<Profile>(`/profile?email=${encodeURIComponent(normalizedEmail)}`); } catch { return null; }
 }
 
 export async function saveProfile(profile: Profile): Promise<boolean> {
   if (!API_URL) return true;
-  try {
-    await request<Profile>('/profile', { method: 'PUT', body: JSON.stringify(profile) });
-    return true;
-  } catch {
-    return false;
-  }
+  try { await request<Profile>('/profile', { method: 'PUT', body: JSON.stringify(profile) }); return true; } catch { return false; }
+}
+
+export async function getJob(jobId: string, email = ''): Promise<Job | null> {
+  if (!API_URL || !jobId) return null;
+  try { return await request<Job>(`/jobs/${encodeURIComponent(jobId)}${email ? `?email=${encodeURIComponent(email)}` : ''}`); } catch { return null; }
+}
+
+export async function prepareApplicationRemote(jobId: string, profile: Profile): Promise<ApplicationDrafts | null> {
+  if (!API_URL || !jobId) return null;
+  try { return await request<ApplicationDrafts>('/applications/prepare', { method: 'POST', body: JSON.stringify({ job_id: jobId, profile }) }); } catch { return null; }
 }
 
 export async function getContract(): Promise<JobIAContract | null> {
