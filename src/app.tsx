@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bell, BriefcaseBusiness, Bookmark, Check, ChevronRight, CircleCheck, ExternalLink, FileText, LayoutDashboard, MapPin, Menu, Search, Settings, Sparkles, UserRound, WandSparkles, X } from 'lucide-react';
-import { API_URL, getJobs, saveProfile, type Job, type Profile } from './api';
+import { API_URL, getJobs, getProfile, saveProfile, type Job, type Profile } from './api';
 import { calculateMatch, rankJobs } from './matching';
 import { prepareApplication } from './preparation';
 import { defaultProfile, loadApplications, loadFrequency, loadProfile, loadSaved, persistFrequency, persistProfile, saveApplication, toggleSaved, updateApplication, type Application, type ApplicationDrafts } from './storage';
@@ -24,7 +24,26 @@ export default function App() {
   const [selected, setSelected] = useState<Job | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
 
-  useEffect(() => { setProfile(loadProfile()); setFrequency(loadFrequency()); setSavedIds(loadSaved()); setApplications(loadApplications()); void loadJobs(); }, []);
+  useEffect(() => {
+    let active = true;
+    const localProfile = loadProfile();
+    setProfile(localProfile);
+    setFrequency(loadFrequency());
+    setSavedIds(loadSaved());
+    setApplications(loadApplications());
+    void loadJobs();
+
+    const syncProfile = async () => {
+      if (!API_URL || !localProfile.email.trim()) return;
+      const remoteProfile = await getProfile(localProfile.email);
+      if (active && remoteProfile) {
+        setProfile(remoteProfile);
+        persistProfile(remoteProfile);
+      }
+    };
+    void syncProfile();
+    return () => { active = false; };
+  }, []);
   const loadJobs = async (q = '') => { setLoading(true); const result = await getJobs(q); setJobs(result.jobs); setSource(result.source); setLoading(false); };
   const navigate = (next: Section) => { setSection(next); setMobileOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const rankedJobs = useMemo(() => rankJobs(jobs, profile).map(({ job, match }) => ({ ...job, match: match.score })), [jobs, profile]);
