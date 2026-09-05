@@ -1,0 +1,11 @@
+{
+  "name": "JobIA — Empleo inteligente",
+  "short_name": "JobIA",
+  "description": "Inteligencia para descubrir, entender y preparar oportunidades profesionales.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8fb",
+  "theme_color": "#0b1220",
+  "lang": "es",
+  "categories": ["business", "productivity", "jobs"]
+}
