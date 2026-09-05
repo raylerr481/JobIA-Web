@@ -1,5 +1,5 @@
 export type Job = { id: string; title: string; company: string; location: string; modality: string; kind: string; match: number; compensation?: string; summary: string; url?: string; skills?: string[] };
-export type Profile = { email: string; profession: string; mode: string; aiOpportunities: boolean; skills: string[] };
+export type Profile = { email: string; profession: string; mode: string; aiOpportunities: boolean; skills?: string[] };
 const API_URL = (import.meta.env.VITE_JOBIA_API_URL as string | undefined)?.replace(/\/$/, '');
 const demoJobs: Job[] = [
   { id: 'demo-1', title: 'AI Response Evaluator', company: 'JobIA Network', location: 'Brasil', modality: 'Remoto', kind: 'Human-in-the-loop', match: 94, summary: 'Avalie respuestas de IA usando su conocimiento técnico y criterios de calidad.', skills: ['IA', 'Evaluación', 'Portugués', 'Pensamiento crítico'] },
