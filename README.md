@@ -1,31 +1,53 @@
 # JobIA-Web
 
-**Frontend web oficial de JobIA**, el módulo de empleo de **Bitey IA Web**.
+**Web oficial e independiente de JobIA**, la plataforma especializada en empleo y trabajo del ecosistema Bitey.
 
-Este repositorio contiene exclusivamente la interfaz web. No contiene el backend ni la aplicación Android.
+Este repositorio contiene exclusivamente la interfaz web de JobIA. No contiene el backend de JobIA ni la aplicación Android. **JobIA-Web tiene su propia identidad y web; Bitey IA Web tiene su propia web independiente.**
 
 ## Arquitectura
 
 ```text
-                         BITEY IA WEB
-                    inteligencia general
-                           │
-                           ▼
-                    JobIA Backend
-                  módulo de empleo
-                           │
-                    HTTPS / JSON
-                  ┌────────┴────────┐
-                  ▼                 ▼
-             JobIA-Web         JobIA-app
-             Web frontend        Android
+                 BITEY IA WEB
+          inteligencia general / núcleo
+                    │     ▲
+       contiene    │     │ capacidades generales
+       Bitey       │     │
+       Trainer     ▼     │
+              ┌──────────────┐
+              │    JobIA     │
+              │ especialidad │
+              │ empleo/trabajo│
+              └──────┬───────┘
+                     │ jobia-v1
+              ┌──────┴─────────┐
+              ▼                ▼
+         JobIA-Web         JobIA-app
+            Web              Android
 ```
 
-- `bitey-web` → cerebro general, memoria, herramientas, políticas y orquestación.
-- `JobIA` → backend especializado de empleo, contrato `jobia-v1`.
-- `JobIA-Web` → este frontend web.
-- `JobIA-app` → cliente Android independiente.
-- `bitey-trainer` → entrenamiento y validación interna de inteligencia para JobIA.
+- `bitey-web` → producto/web de Bitey IA Web, inteligencia general, memoria, herramientas, políticas y orquestación.
+- `bitey-trainer` → modelo/capacidad interna de Bitey IA Web para entrenamiento, evaluación y validación; no es una segunda web ni un cliente.
+- `JobIA` → producto/backend especializado de empleo, contrato `jobia-v1`.
+- `JobIA-Web` → web independiente de JobIA.
+- `JobIA-app` → aplicación Android independiente de JobIA.
+
+## Relación entre las capacidades
+
+JobIA-Web y JobIA-app dependen del desarrollo y las capacidades que proporciona Bitey IA Web, incluido Bitey Trainer, pero mantienen su propia interfaz y ciclo de producto.
+
+La comunicación entre productos se realiza mediante contratos versionados y APIs. No existe acoplamiento directo entre las interfaces de Bitey-Web y JobIA-Web.
+
+El flujo puede ser bidireccional:
+
+```text
+Bitey IA Web ── solicitud de empleo/trabajo ──► JobIA
+Bitey IA Web ◄─ resultado especializado ─────── JobIA
+
+JobIA ── necesita razonamiento general ─────────► Bitey IA Web
+JobIA ◄─ capacidad general/orquestación ───────── Bitey IA Web
+
+Bitey Trainer ── capacidades validadas ─────────► JobIA
+```
 
 ## Contrato backend
 
@@ -44,22 +66,9 @@ Endpoints principales consumidos por el frontend:
 - `PUT /profile`
 - `GET /api/v1/capabilities`
 - `GET /api/v1/module/status`
+- `GET /api/v1/contract`
 
-El frontend puede mantener estado local para UX, pero la fuente de servicios de JobIA es el backend `JobIA`.
-
-## Relación con Bitey IA Web
-
-JobIA-Web no implementa el cerebro general. Cuando una capacidad requiere razonamiento/orquestación de Bitey, el flujo conceptual es:
-
-```text
-Usuario → JobIA-Web → JobIA API → Bitey IA Web / Trainer / herramientas
-                                  ↓
-                            resultado validado
-                                  ↓
-                              JobIA-Web
-```
-
-Los clientes nunca reciben secretos de proveedores ni claves privadas de infraestructura.
+El cliente puede mantener estado local para UX, pero las capacidades de producto de JobIA pertenecen al backend `JobIA`.
 
 ## Funcionalidades
 
@@ -98,4 +107,4 @@ El build de producción debe pasar TypeScript y Vite antes del despliegue.
 
 ## Principio
 
-> **Bitey IA Web es la inteligencia general; JobIA es el módulo especializado de empleo; JobIA es el backend compartido; JobIA-Web y JobIA-app son clientes independientes.**
+> **Bitey IA Web y JobIA son productos independientes; Bitey Trainer es una capacidad/modelo interno de Bitey IA Web; JobIA-Web y JobIA-app son las interfaces independientes de JobIA.**
