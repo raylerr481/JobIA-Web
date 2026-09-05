@@ -1,127 +1,101 @@
 # JobIA-Web
 
-**Frontend web oficial de JobIA.**
+**Frontend web oficial de JobIA**, el módulo de empleo de **Bitey IA Web**.
 
-Este repositorio contiene exclusivamente la interfaz web de JobIA. **No contiene el backend principal ni el código de la aplicación Android.**
+Este repositorio contiene exclusivamente la interfaz web. No contiene el backend ni la aplicación Android.
 
-## Ecosistema JobIA
+## Arquitectura
 
 ```text
-                    JobIA
-              Backend / API / IA
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-     JobIA-Web            JobIA App
-    Frontend web        App Android
+                         BITEY IA WEB
+                    inteligencia general
+                           │
+                           ▼
+                    JobIA Backend
+                  módulo de empleo
+                           │
+                    HTTPS / JSON
+                  ┌────────┴────────┐
+                  ▼                 ▼
+             JobIA-Web         JobIA-app
+             Web frontend        Android
 ```
 
-- **JobIA** → backend y API de JobIA.
-- **JobIA-Web** → este frontend web.
-- **JobIA App** → aplicación Android instalable.
+- `bitey-web` → cerebro general, memoria, herramientas, políticas y orquestación.
+- `JobIA` → backend especializado de empleo, contrato `jobia-v1`.
+- `JobIA-Web` → este frontend web.
+- `JobIA-app` → cliente Android independiente.
+- `bitey-trainer` → entrenamiento y validación interna de inteligencia para JobIA.
 
-JobIA-Web consume los servicios de **JobIA** mediante HTTPS/JSON. No duplica la lógica sensible del backend.
+## Contrato backend
+
+Configura:
+
+```bash
+VITE_JOBIA_API_URL=https://tu-backend-jobia.example
+```
+
+Endpoints principales consumidos por el frontend:
+
+- `GET /health`
+- `GET /jobs`
+- `GET /jobs/{job_id}`
+- `GET /profile`
+- `PUT /profile`
+- `GET /api/v1/capabilities`
+- `GET /api/v1/module/status`
+
+El frontend puede mantener estado local para UX, pero la fuente de servicios de JobIA es el backend `JobIA`.
+
+## Relación con Bitey IA Web
+
+JobIA-Web no implementa el cerebro general. Cuando una capacidad requiere razonamiento/orquestación de Bitey, el flujo conceptual es:
+
+```text
+Usuario → JobIA-Web → JobIA API → Bitey IA Web / Trainer / herramientas
+                                  ↓
+                            resultado validado
+                                  ↓
+                              JobIA-Web
+```
+
+Los clientes nunca reciben secretos de proveedores ni claves privadas de infraestructura.
 
 ## Funcionalidades
 
 - Dashboard profesional.
-- Búsqueda de oportunidades.
+- Búsqueda y filtros de oportunidades.
 - Ranking y explicación de compatibilidad.
-- Filtros y preferencias profesionales.
-- Oportunidades guardadas.
 - Perfil profesional.
-- Alertas configurables.
+- Guardados.
+- Alertas.
 - Seguimiento de aplicaciones.
-- Preparación local de CV, cartas y respuestas.
-- Diseño responsive para escritorio y móvil.
-- Fallback a datos demo cuando la API no está configurada o no responde.
+- Preparación de CV, cartas y respuestas.
+- Responsive desktop/mobile.
+- Fallback demo cuando el backend no está configurado o disponible.
 
-## Contrato con el backend
+## Seguridad
 
-El frontend puede conectarse al backend mediante:
+Nunca incluir en el navegador:
 
-```bash
-VITE_JOBIA_API_URL=https://tu-api-jobia.example
-```
+- claves privadas de proveedores;
+- credenciales de base de datos;
+- `service_role` de Supabase;
+- secretos de integración.
 
-El cliente utiliza contratos HTTP del backend de **JobIA**. La URL concreta de producción debe configurarse en el entorno de despliegue y no debe contener secretos.
-
-El frontend no debe incluir:
-
-- Claves privadas de proveedores.
-- Credenciales de base de datos.
-- Claves `service_role` de Supabase.
-- Secretos de integración.
-- Lógica que deba permanecer protegida en el backend.
-
-## Flujo de usuario
-
-```text
-Buscar → Explorar → Hacer match → Entender → Guardar
-                                      ↓
-                                  Preparar
-                                      ↓
-                              Revisar y autorizar
-```
-
-JobIA-Web prepara y presenta información para el usuario. No debe enviar candidaturas automáticamente sin consentimiento ni saltarse las reglas de plataformas externas.
+Las acciones externas sensibles requieren consentimiento del usuario.
 
 ## Desarrollo
 
-Instalar dependencias:
-
 ```bash
 npm install
-```
-
-Servidor de desarrollo:
-
-```bash
 npm run dev
-```
-
-Verificación de producción:
-
-```bash
 npm run build
-```
-
-Vista previa:
-
-```bash
 npm run preview
 ```
 
-## Build y despliegue
-
-El proyecto utiliza Vite y está preparado para despliegue estático. `dist/` es el directorio generado para producción.
-
-La configuración de Cloudflare Pages se encuentra en `wrangler.toml`. La configuración de CI se encuentra en `.github/workflows/build.yml`.
-
-El build debe pasar `tsc -b` y `vite build` antes de considerar una versión lista para despliegue.
-
-## Arquitectura de frontend
-
-```text
-React + TypeScript
-        │
-      Vite
-        │
-   JobIA-Web
-        │
-   HTTPS / JSON
-        │
-     JobIA API
-        │
- Backend / IA / datos
-```
-
-La aplicación mantiene funcionalidades locales como preferencias, oportunidades guardadas y borradores de aplicación cuando corresponde, pero el backend de referencia sigue siendo **JobIA**.
-
-## Relación con JobIA App
-
-**JobIA App es un cliente independiente para Android.** No forma parte de este repositorio. Ambos clientes utilizan el backend JobIA, pero sus interfaces y ciclos de desarrollo permanecen separados.
+El build de producción debe pasar TypeScript y Vite antes del despliegue.
 
 ## Principio
 
-> **JobIA es el backend. JobIA-Web es el frontend web. JobIA App es la aplicación Android. Tres repositorios independientes, un mismo producto JobIA.**
+> **Bitey IA Web es la inteligencia general; JobIA es el módulo especializado de empleo; JobIA es el backend compartido; JobIA-Web y JobIA-app son clientes independientes.**
