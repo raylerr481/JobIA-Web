@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Bell, BriefcaseBusiness, Bookmark, Check, ChevronRight, CircleCheck, ExternalLink, FileText, LayoutDashboard, MapPin, Menu, Search, Settings, Sparkles, UserRound, WandSparkles, X } from 'lucide-react';
-import { API_URL, getJobs, getProfile, saveProfile, type Job, type Profile } from './api';
+import { API_URL, getJobs, getProfile, prepareApplicationRemote, saveProfile, type ApplicationDrafts, type Job, type Profile } from './api';
 import { calculateMatch, rankJobs } from './matching';
 import { prepareApplication } from './preparation';
-import { defaultProfile, loadApplications, loadFrequency, loadProfile, loadSaved, persistFrequency, persistProfile, saveApplication, toggleSaved, updateApplication, type Application, type ApplicationDrafts } from './storage';
+import { defaultProfile, loadApplications, loadFrequency, loadProfile, loadSaved, persistFrequency, persistProfile, saveApplication, toggleSaved, updateApplication, type Application } from './storage';
 
 type Section = 'dashboard' | 'jobs' | 'saved' | 'applications' | 'profile' | 'alerts';
 const professions = ['Informática / IT', 'Administración', 'Educación', 'Diseño', 'Marketing', 'Contabilidad', 'Oficios técnicos', 'Ventas', 'Salud', 'Otra'];
@@ -31,7 +31,7 @@ export default function App() {
     setFrequency(loadFrequency());
     setSavedIds(loadSaved());
     setApplications(loadApplications());
-    void loadJobs();
+    void loadJobs('', localProfile.email);
 
     const syncProfile = async () => {
       if (!API_URL || !localProfile.email.trim()) return;
@@ -39,19 +39,45 @@ export default function App() {
       if (active && remoteProfile) {
         setProfile(remoteProfile);
         persistProfile(remoteProfile);
+        void loadJobs('', remoteProfile.email);
       }
     };
     void syncProfile();
     return () => { active = false; };
   }, []);
-  const loadJobs = async (q = '') => { setLoading(true); const result = await getJobs(q); setJobs(result.jobs); setSource(result.source); setLoading(false); };
+
+  const loadJobs = async (q = '', email = profile.email) => {
+    setLoading(true);
+    const result = await getJobs(q, email);
+    setJobs(result.jobs);
+    setSource(result.source);
+    setLoading(false);
+  };
+
   const navigate = (next: Section) => { setSection(next); setMobileOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const rankedJobs = useMemo(() => rankJobs(jobs, profile).map(({ job, match }) => ({ ...job, match: match.score })), [jobs, profile]);
+  const rankedJobs = useMemo(() => {
+    if (source === 'api') return jobs;
+    return rankJobs(jobs, profile).map(({ job, match }) => ({ ...job, match: match.score }));
+  }, [jobs, profile, source]);
   const savedJobs = useMemo(() => rankedJobs.filter(j => savedIds.includes(j.id)), [rankedJobs, savedIds]);
   const onToggleSaved = (id: string) => setSavedIds(toggleSaved(id));
-  const onSaveProfile = async () => { persistProfile(profile); const ok = await saveProfile(profile); setSavedNotice(ok || !API_URL); setTimeout(() => setSavedNotice(false), 2500); };
+  const onSaveProfile = async () => {
+    persistProfile(profile);
+    const ok = await saveProfile(profile);
+    setSavedNotice(ok || !API_URL);
+    if (ok && API_URL) void loadJobs(query, profile.email);
+    setTimeout(() => setSavedNotice(false), 2500);
+  };
   const onFrequency = (value: string) => { setFrequency(value); persistFrequency(value); };
-  const onPrepare = (job: Job) => { const drafts = prepareApplication(job, profile); saveApplication(job, 'preparando', drafts); setApplications(loadApplications()); setSelected(job); };
+  const onPrepare = async (job: Job, draftsOverride?: ApplicationDrafts): Promise<ApplicationDrafts | null> => {
+    const drafts = draftsOverride ?? (await prepareApplicationRemote(job.id, profile));
+    const finalDrafts = drafts ?? (!API_URL ? prepareApplication(job, profile) : null);
+    if (!finalDrafts) return null;
+    saveApplication(job, 'preparando', finalDrafts);
+    setApplications(loadApplications());
+    setSelected(job);
+    return finalDrafts;
+  };
 
   return <div className="app-shell">
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
@@ -67,17 +93,17 @@ export default function App() {
       <div className="sidebar-bottom"><button className="nav-item"><Settings size={18} /> Configuración</button><div className="trainer"><Sparkles size={17} /><div><b>Bitey Trainer</b><small>Motor de inteligencia activo</small></div><span className="dot" /></div></div>
     </aside>
     <main className="main">
-      <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)}><Menu size={22} /></button><div className="top-search"><Search size={18} /><input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && (navigate('jobs'), void loadJobs(query))} placeholder="Buscar puestos, habilidades o empresas..." /></div><button className="icon-btn" onClick={() => navigate('alerts')} aria-label="Alertas"><Bell size={19} /></button><button className="avatar" onClick={() => navigate('profile')}>J</button></header>
+      <header className="topbar"><button className="mobile-menu" onClick={() => setMobileOpen(true)}><Menu size={22} /></button><div className="top-search"><Search size={18} /><input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && (navigate('jobs'), void loadJobs(query, profile.email))} placeholder="Buscar puestos, habilidades o empresas..." /></div><button className="icon-btn" onClick={() => navigate('alerts')} aria-label="Alertas"><Bell size={19} /></button><button className="avatar" onClick={() => navigate('profile')}>J</button></header>
       <div className="content">
         {section === 'dashboard' && <Dashboard jobs={rankedJobs} profile={profile} source={source} savedIds={savedIds} navigate={navigate} onOpen={setSelected} />}
-        {section === 'jobs' && <Jobs jobs={rankedJobs} query={query} setQuery={setQuery} loading={loading} source={source} savedIds={savedIds} onSearch={() => void loadJobs(query)} onToggleSaved={onToggleSaved} onOpen={setSelected} onPrepare={onPrepare} />}
+        {section === 'jobs' && <Jobs jobs={rankedJobs} query={query} setQuery={setQuery} loading={loading} source={source} savedIds={savedIds} onSearch={() => void loadJobs(query, profile.email)} onToggleSaved={onToggleSaved} onOpen={setSelected} onPrepare={onPrepare} />}
         {section === 'saved' && <Jobs jobs={savedJobs} query={query} setQuery={setQuery} loading={false} source={source} savedIds={savedIds} onSearch={() => undefined} onToggleSaved={onToggleSaved} onOpen={setSelected} onPrepare={onPrepare} savedView />}
         {section === 'profile' && <ProfileEditor profile={profile} setProfile={setProfile} saved={savedNotice} onSave={onSaveProfile} />}
         {section === 'alerts' && <Alerts frequency={frequency} setFrequency={onFrequency} />}
         {section === 'applications' && <Applications applications={applications} onOpen={setSelected} onUpdate={patch => { setApplications(updateApplication(patch.id, patch)); }} />}
       </div>
     </main>
-    {selected && <JobDetail job={selected} saved={savedIds.includes(selected.id)} profile={profile} application={applications.find(a => a.job.id === selected.id)} onClose={() => setSelected(null)} onToggleSaved={() => onToggleSaved(selected.id)} onPrepare={() => onPrepare(selected)} onUpdate={patch => setApplications(updateApplication(patch.id, patch))} />}
+    {selected && <JobDetail job={selected} saved={savedIds.includes(selected.id)} profile={profile} application={applications.find(a => a.job.id === selected.id)} onClose={() => setSelected(null)} onToggleSaved={() => onToggleSaved(selected.id)} onPrepare={onPrepare} onUpdate={patch => setApplications(updateApplication(patch.id, patch))} />}
   </div>;
 }
 
@@ -86,28 +112,37 @@ function Dashboard({ jobs, profile, source, savedIds, navigate, onOpen }: { jobs
   <div className="stats"><Stat title="Oportunidades" value={`${jobs.length}`} detail="última búsqueda" /><Stat title="Mejor coincidencia" value={`${top[0]?.match ?? 0}%`} detail="calculada por JobIA" /><Stat title="Guardadas" value={`${savedIds.length}`} detail="para revisar" /><Stat title="Perfil" value={profile.profession ? 'Activo' : 'Pendiente'} detail={profile.mode} /></div>
   <div className="section-head"><div><h2>Recomendadas para ti</h2><p>Ordenadas por el motor de matching de JobIA según tu perfil actual.</p></div><button className="text-btn" onClick={() => navigate('jobs')}>Ver todas <ChevronRight size={16} /></button></div><div className="job-grid">{top.map(job => <JobCard key={job.id} job={job} saved={savedIds.includes(job.id)} onOpen={onOpen} />)}</div>
   <div className="info-grid"><div className="panel"><div className="panel-icon"><UserRound size={18} /></div><div><h3>Completa tu perfil</h3><p>Añade habilidades, experiencia, certificaciones y preferencias para mejorar el matching.</p><button className="text-btn" onClick={() => navigate('profile')}>Editar perfil <ChevronRight size={16} /></button></div></div><div className="panel"><div className="panel-icon"><Bell size={18} /></div><div><h3>Configura tus alertas</h3><p>Recibe oportunidades con la frecuencia que tú decidas.</p><button className="text-btn" onClick={() => navigate('alerts')}>Configurar <ChevronRight size={16} /></button></div></div></div>
-  <div className="connection"><CircleCheck size={16} /> {source === 'api' ? 'Conectado al JobIA API · matching local activo' : API_URL ? 'API no disponible — matching local en modo seguro' : 'Modo demostración — matching local activo; configura VITE_JOBIA_API_URL para conectar el backend'}</div></>;
+  <div className="connection"><CircleCheck size={16} /> {source === 'api' ? 'Conectado al JobIA API · matching y preparación en backend' : API_URL ? 'API no disponible — inteligencia local en modo seguro' : 'Modo demostración — inteligencia local; configura VITE_JOBIA_API_URL para conectar el backend'}</div></>;
 }
 
 function Jobs({ jobs, query, setQuery, loading, source, savedIds, onSearch, onToggleSaved, onOpen, onPrepare, savedView = false }: { jobs: Job[]; query: string; setQuery: (v: string) => void; loading: boolean; source: string; savedIds: string[]; onSearch: () => void; onToggleSaved: (id: string) => void; onOpen: (j: Job) => void; onPrepare: (j: Job) => void; savedView?: boolean }) {
   return <><div className="page-heading"><div><div className="eyebrow"><Search size={14} /> {savedView ? 'GUARDADAS' : 'OPORTUNIDADES'}</div><h1>{savedView ? 'Oportunidades guardadas' : 'Trabajo seleccionado para ti'}</h1><p>{savedView ? 'Revisa las oportunidades que decidiste conservar.' : 'Explora oportunidades y entiende por qué JobIA las considera compatibles.'}</p></div>{!savedView && <span className="source-pill"><span className="dot" /> {source === 'api' ? 'Datos en vivo' : 'Modo demo'} · matching JobIA</span>}</div>
   {!savedView && <div className="search-box"><Search size={19} /><input value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => e.key === 'Enter' && onSearch()} placeholder="Ej.: Python, soporte técnico, remoto..." /><button className="primary small" onClick={onSearch}>Buscar</button></div>}
-  {loading ? <div className="empty"><div className="loader" /><h3>Analizando oportunidades...</h3><p>JobIA está consultando su fuente de oportunidades.</p></div> : <div className="job-list">{jobs.map(job => <JobCard key={job.id} job={job} detailed saved={savedIds.includes(job.id)} onOpen={onOpen} onToggleSaved={() => onToggleSaved(job.id)} onPrepare={() => onPrepare(job)} />)}{jobs.length === 0 && <div className="empty"><Bookmark size={30} /><h3>{savedView ? 'No tienes oportunidades guardadas' : 'No encontramos coincidencias'}</h3><p>{savedView ? 'Guarda una oportunidad desde el buscador para verla aquí.' : 'Prueba otra búsqueda o completa tu perfil para mejorar los resultados.'}</p></div>}</div>}</>;
+  {loading ? <div className="empty"><div className="loader" /><h3>Analizando oportunidades...</h3><p>JobIA está consultando su fuente de oportunidades.</p></div> : <div className="job-list">{jobs.map(job => <JobCard key={job.id} job={job} detailed saved={savedIds.includes(job.id)} onOpen={onOpen} onToggleSaved={() => onToggleSaved(job.id)} onPrepare={() => void onPrepare(job)} />)}{jobs.length === 0 && <div className="empty"><Bookmark size={30} /><h3>{savedView ? 'No tienes oportunidades guardadas' : 'No encontramos coincidencias'}</h3><p>{savedView ? 'Guarda una oportunidad desde el buscador para verla aquí.' : 'Prueba otra búsqueda o completa tu perfil para mejorar los resultados.'}</p></div>}</div>}</>;
 }
 
 function JobCard({ job, detailed = false, saved = false, onOpen, onToggleSaved, onPrepare }: { job: Job; detailed?: boolean; saved?: boolean; onOpen: (j: Job) => void; onToggleSaved?: () => void; onPrepare?: () => void }) {
   return <article className={`job-card ${detailed ? 'detailed' : ''}`}><div className="company-logo">{job.company.slice(0, 1).toUpperCase()}</div><div className="job-main" onClick={() => onOpen(job)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && onOpen(job)}><div className="job-top"><span className="match">{job.match}% Match</span><span className="job-kind">{job.kind}</span></div><h3>{job.title}</h3><p className="company">{job.company}</p><p className="summary">{job.summary}</p><div className="chips"><span><MapPin size={14} /> {job.location}</span><span><BriefcaseBusiness size={14} /> {job.modality}</span>{job.compensation && <span>{job.compensation}</span>}</div></div><div className="card-actions">{onToggleSaved && <button className={`icon-btn ${saved ? 'selected-icon' : ''}`} onClick={onToggleSaved} aria-label="Guardar oportunidad"><Bookmark size={17} fill={saved ? 'currentColor' : 'none'} /></button>}<button className="outline" onClick={() => onOpen(job)}>Revisar <ChevronRight size={15} /></button>{onPrepare && <button className="primary small" onClick={onPrepare}>Preparar</button>}</div></article>;
 }
 
-function JobDetail({ job, saved, profile, application, onClose, onToggleSaved, onPrepare, onUpdate }: { job: Job; saved: boolean; profile: Profile; application?: Application; onClose: () => void; onToggleSaved: () => void; onPrepare: () => void; onUpdate: (patch: { id: string; status?: Application['status']; drafts?: ApplicationDrafts }) => void }) {
+function JobDetail({ job, saved, profile, application, onClose, onToggleSaved, onPrepare, onUpdate }: { job: Job; saved: boolean; profile: Profile; application?: Application; onClose: () => void; onToggleSaved: () => void; onPrepare: (job: Job, draftsOverride?: ApplicationDrafts) => Promise<ApplicationDrafts | null>; onUpdate: (patch: { id: string; status?: Application['status']; drafts?: ApplicationDrafts }) => void }) {
   const [preparing, setPreparing] = useState(Boolean(application?.drafts));
-  const [drafts, setDrafts] = useState<ApplicationDrafts>(application?.drafts ?? prepareApplication(job, profile));
+  const [preparingRemote, setPreparingRemote] = useState(false);
+  const [drafts, setDrafts] = useState<ApplicationDrafts | null>(application?.drafts ?? null);
   const match = calculateMatch(job, profile);
   const currentApp = application;
-  const startPreparation = () => { const next = prepareApplication(job, profile); setDrafts(next); setPreparing(true); onPrepare(); };
-  const saveDrafts = () => { if (!currentApp) { onPrepare(); } else { onUpdate({ id: currentApp.id, status: 'preparando', drafts }); } };
+  const startPreparation = async () => {
+    setPreparingRemote(true);
+    const next = await onPrepare(job);
+    if (next) { setDrafts(next); setPreparing(true); }
+    setPreparingRemote(false);
+  };
+  const saveDrafts = async () => {
+    if (!drafts) return;
+    if (!currentApp) { await onPrepare(job, drafts); } else { onUpdate({ id: currentApp.id, status: 'preparando', drafts }); }
+  };
   return <div className="modal-backdrop" onClick={onClose}><section className={`detail-modal ${preparing ? 'wide' : ''}`} onClick={e => e.stopPropagation()}><button className="modal-close" onClick={onClose}><X size={20} /></button>
-    {!preparing ? <><div className="eyebrow"><Sparkles size={14} /> EXPLICACIÓN DE MATCH</div><h2>{job.title}</h2><p className="company">{job.company} · {job.location} · {job.modality}</p><div className="match-big">{match.score}% <span>compatibilidad calculada por JobIA</span></div><p>{job.summary}</p><h3>¿Por qué encaja?</h3><div className="chips">{match.strengths.length ? match.strengths.map(s => <span key={s}>✓ {s}</span>) : <span>El perfil aún necesita más señales de coincidencia.</span>}</div>{match.gaps.length > 0 && <><h3>Aspectos a reforzar</h3><div className="chips">{match.gaps.map(s => <span key={s}>○ {s}</span>)}</div></>}<h3>Próximo paso</h3><p>JobIA prepara borradores localmente. Tú revisas el contenido y autorizas cualquier acción externa.</p><div className="modal-actions"><button className="outline" onClick={onToggleSaved}><Bookmark size={16} fill={saved ? 'currentColor' : 'none'} /> {saved ? 'Guardada' : 'Guardar'}</button><button className="primary" onClick={startPreparation}><WandSparkles size={16} /> {currentApp?.drafts ? 'Editar candidatura' : 'Preparar candidatura'}</button>{job.url && <button className="outline" onClick={() => window.open(job.url, '_blank', 'noopener,noreferrer')}><ExternalLink size={16} /> Ver oferta</button>}</div></> : <><div className="eyebrow"><WandSparkles size={14} /> PREPARACIÓN ASISTIDA</div><h2>Preparar candidatura</h2><p className="company">{job.title} · {job.company}</p><div className="draft-grid"><DraftField label="Resumen para CV" value={drafts.cvSummary} onChange={v => setDrafts(d => ({ ...d, cvSummary: v }))} /><DraftField label="Carta de presentación" value={drafts.coverLetter} onChange={v => setDrafts(d => ({ ...d, coverLetter: v }))} /><DraftField label="Respuestas de candidatura" value={drafts.answers} onChange={v => setDrafts(d => ({ ...d, answers: v }))} /><DraftField label="Notas de revisión" value={drafts.notes} onChange={v => setDrafts(d => ({ ...d, notes: v }))} /></div><div className="modal-actions"><button className="outline" onClick={() => setPreparing(false)}>Volver</button><button className="primary" onClick={saveDrafts}><Check size={16} /> Guardar preparación</button></div><p className="privacy-note">La preparación se genera localmente en este frontend. No se envía una candidatura automáticamente.</p></>}
+    {!preparing ? <><div className="eyebrow"><Sparkles size={14} /> EXPLICACIÓN DE MATCH</div><h2>{job.title}</h2><p className="company">{job.company} · {job.location} · {job.modality}</p><div className="match-big">{match.score}% <span>compatibilidad calculada por JobIA</span></div><p>{job.summary}</p><h3>¿Por qué encaja?</h3><div className="chips">{match.strengths.length ? match.strengths.map(s => <span key={s}>✓ {s}</span>) : <span>El perfil aún necesita más señales de coincidencia.</span>}</div>{match.gaps.length > 0 && <><h3>Aspectos a reforzar</h3><div className="chips">{match.gaps.map(s => <span key={s}>○ {s}</span>)}</div></>}<h3>Próximo paso</h3><p>JobIA genera la preparación en el backend cuando está conectado. Tú revisas el contenido y autorizas cualquier acción externa.</p><div className="modal-actions"><button className="outline" onClick={onToggleSaved}><Bookmark size={16} fill={saved ? 'currentColor' : 'none'} /> {saved ? 'Guardada' : 'Guardar'}</button><button className="primary" onClick={() => void startPreparation()} disabled={preparingRemote}><WandSparkles size={16} /> {preparingRemote ? 'Preparando…' : currentApp?.drafts ? 'Editar candidatura' : 'Preparar candidatura'}</button>{job.url && <button className="outline" onClick={() => window.open(job.url, '_blank', 'noopener,noreferrer')}><ExternalLink size={16} /> Ver oferta</button>}</div></> : <><div className="eyebrow"><WandSparkles size={14} /> PREPARACIÓN ASISTIDA</div><h2>Preparar candidatura</h2><p className="company">{job.title} · {job.company}</p>{drafts ? <div className="draft-grid"><DraftField label="Resumen para CV" value={drafts.cvSummary} onChange={v => setDrafts(d => d ? ({ ...d, cvSummary: v }) : d)} /><DraftField label="Carta de presentación" value={drafts.coverLetter} onChange={v => setDrafts(d => d ? ({ ...d, coverLetter: v }) : d)} /><DraftField label="Respuestas de candidatura" value={drafts.answers} onChange={v => setDrafts(d => d ? ({ ...d, answers: v }) : d)} /><DraftField label="Notas de revisión" value={drafts.notes} onChange={v => setDrafts(d => d ? ({ ...d, notes: v }) : d)} /></div> : <div className="empty"><h3>No hay borradores disponibles</h3><p>Vuelve a intentar la preparación con el backend disponible.</p></div>}<div className="modal-actions"><button className="outline" onClick={() => setPreparing(false)}>Volver</button><button className="primary" onClick={() => void saveDrafts()} disabled={!drafts}><Check size={16} /> Guardar preparación</button></div><p className="privacy-note">La preparación es generada por JobIA Backend cuando la API está disponible. No se envía una candidatura automáticamente.</p></>}
   </section></div>;
 }
 
