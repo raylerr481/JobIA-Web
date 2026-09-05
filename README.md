@@ -1,65 +1,127 @@
-# JobIA Web
+# JobIA-Web
 
-Frontend web oficial de JobIA. Este repositorio contiene exclusivamente la experiencia web; el código de producto/app se mantiene en [`raylerr481/JobIA`](https://github.com/raylerr481/JobIA).
+**Frontend web oficial de JobIA.**
 
-## Qué hace
+Este repositorio contiene exclusivamente la interfaz web de JobIA. **No contiene el backend principal ni el código de la aplicación Android.**
 
-- Dashboard profesional y responsive.
-- Búsqueda y ranking de oportunidades.
-- Perfil profesional y preferencias.
-- Alertas configurables por el usuario.
-- Seguimiento de aplicaciones.
-- Integración opcional con JobIA API mediante `VITE_JOBIA_API_URL`.
-- Fallback seguro a datos demo cuando el backend no está configurado o no responde.
-
-## Arquitectura
+## Ecosistema JobIA
 
 ```text
-BITEY IA
-   │
- JobIA
-   ├───────────────┐
- Android App    JobIA Web
-                  │
-             HTTPS / JSON
-                  │
-              JobIA API
-                  │
-             Bitey Trainer
-                  │
-        Supabase / integraciones
+                    JobIA
+              Backend / API / IA
+                    │
+          ┌─────────┴─────────┐
+          │                   │
+     JobIA-Web            JobIA App
+    Frontend web        App Android
 ```
 
-La web no contiene claves privadas, credenciales de proveedores ni claves `service_role` de Supabase. El navegador sólo consume endpoints públicos/autorizados del API.
+- **JobIA** → backend y API de JobIA.
+- **JobIA-Web** → este frontend web.
+- **JobIA App** → aplicación Android instalable.
 
-## Desarrollo
+JobIA-Web consume los servicios de **JobIA** mediante HTTPS/JSON. No duplica la lógica sensible del backend.
 
-```bash
-npm install
-npm run dev
-```
+## Funcionalidades
 
-Producción:
+- Dashboard profesional.
+- Búsqueda de oportunidades.
+- Ranking y explicación de compatibilidad.
+- Filtros y preferencias profesionales.
+- Oportunidades guardadas.
+- Perfil profesional.
+- Alertas configurables.
+- Seguimiento de aplicaciones.
+- Preparación local de CV, cartas y respuestas.
+- Diseño responsive para escritorio y móvil.
+- Fallback a datos demo cuando la API no está configurada o no responde.
 
-```bash
-npm run build
-npm run preview
-```
+## Contrato con el backend
 
-## Backend
-
-Definir en el entorno de despliegue:
+El frontend puede conectarse al backend mediante:
 
 ```bash
 VITE_JOBIA_API_URL=https://tu-api-jobia.example
 ```
 
-El frontend espera, como contrato inicial, `GET /jobs?q=...` y `PUT /profile`. El contrato puede evolucionar con el JobIA API sin acoplar credenciales al navegador.
+El cliente utiliza contratos HTTP del backend de **JobIA**. La URL concreta de producción debe configurarse en el entorno de despliegue y no debe contener secretos.
 
-## Despliegue
+El frontend no debe incluir:
 
-`netlify.toml` ya configura build con Vite, publicación de `dist/` y fallback SPA.
+- Claves privadas de proveedores.
+- Credenciales de base de datos.
+- Claves `service_role` de Supabase.
+- Secretos de integración.
+- Lógica que deba permanecer protegida en el backend.
+
+## Flujo de usuario
+
+```text
+Buscar → Explorar → Hacer match → Entender → Guardar
+                                      ↓
+                                  Preparar
+                                      ↓
+                              Revisar y autorizar
+```
+
+JobIA-Web prepara y presenta información para el usuario. No debe enviar candidaturas automáticamente sin consentimiento ni saltarse las reglas de plataformas externas.
+
+## Desarrollo
+
+Instalar dependencias:
+
+```bash
+npm install
+```
+
+Servidor de desarrollo:
+
+```bash
+npm run dev
+```
+
+Verificación de producción:
+
+```bash
+npm run build
+```
+
+Vista previa:
+
+```bash
+npm run preview
+```
+
+## Build y despliegue
+
+El proyecto utiliza Vite y está preparado para despliegue estático. `dist/` es el directorio generado para producción.
+
+La configuración de Cloudflare Pages se encuentra en `wrangler.toml`. La configuración de CI se encuentra en `.github/workflows/build.yml`.
+
+El build debe pasar `tsc -b` y `vite build` antes de considerar una versión lista para despliegue.
+
+## Arquitectura de frontend
+
+```text
+React + TypeScript
+        │
+      Vite
+        │
+   JobIA-Web
+        │
+   HTTPS / JSON
+        │
+     JobIA API
+        │
+ Backend / IA / datos
+```
+
+La aplicación mantiene funcionalidades locales como preferencias, oportunidades guardadas y borradores de aplicación cuando corresponde, pero el backend de referencia sigue siendo **JobIA**.
+
+## Relación con JobIA App
+
+**JobIA App es un cliente independiente para Android.** No forma parte de este repositorio. Ambos clientes utilizan el backend JobIA, pero sus interfaces y ciclos de desarrollo permanecen separados.
 
 ## Principio
 
-JobIA ayuda a **descubrir → hacer match → explicar → preparar → revisar → autorizar**. La automatización no debe saltarse el consentimiento del usuario ni las reglas de una plataforma de empleo.
+> **JobIA es el backend. JobIA-Web es el frontend web. JobIA App es la aplicación Android. Tres repositorios independientes, un mismo producto JobIA.**
