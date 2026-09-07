@@ -6,7 +6,11 @@ export type JobIAContract = { name: string; module: string; specialization: stri
 export type JobIAStatus = { status: string; service?: string; version?: string; contract?: string; persistence?: string };
 export type ApplicationDrafts = { cvSummary: string; coverLetter: string; answers: string; notes: string };
 
-const API_URL = (import.meta.env.VITE_JOBIA_API_URL as string | undefined)?.replace(/\/$/, '');
+// Public backend origin; VITE_JOBIA_API_URL can override it per deployment.
+// Keeping a production-safe default prevents the Cloudflare Worker build from
+// falling back to demo mode merely because a build-time environment variable
+// was not injected by the hosting platform.
+const API_URL = ((import.meta.env.VITE_JOBIA_API_URL as string | undefined) || 'https://jobia-api.onrender.com').replace(/\/$/, '');
 const REQUEST_TIMEOUT_MS = 9000;
 
 const demoJobs: Job[] = [
