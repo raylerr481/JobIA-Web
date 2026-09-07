@@ -7,9 +7,8 @@ export type JobIAStatus = { status: string; service?: string; version?: string; 
 export type ApplicationDrafts = { cvSummary: string; coverLetter: string; answers: string; notes: string };
 
 // Public backend origin; VITE_JOBIA_API_URL can override it per deployment.
-// Keeping a production-safe default prevents the Cloudflare Worker build from
-// falling back to demo mode merely because a build-time environment variable
-// was not injected by the hosting platform.
+// Production has a safe default so a missing build-time variable cannot silently
+// turn the deployed application into a demo-only experience.
 const API_URL = ((import.meta.env.VITE_JOBIA_API_URL as string | undefined) || 'https://jobia-api.onrender.com').replace(/\/$/, '');
 const REQUEST_TIMEOUT_MS = 9000;
 
@@ -64,7 +63,9 @@ export async function getJobs(query = '', email = ''): Promise<{ jobs: Job[]; so
     const data = await request<JobsResponse>(`/jobs${suffix}`);
     return { jobs: normalizeJobs(data), source: 'api' };
   } catch {
-    return { jobs: filterDemo(query), source: 'demo' };
+    // Production must fail closed: never present synthetic/demo opportunities as
+    // real JobIA matches when the authoritative backend is unavailable.
+    return { jobs: [], source: 'demo' };
   }
 }
 
