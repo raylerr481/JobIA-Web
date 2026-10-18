@@ -13,7 +13,7 @@ export default function App() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [source, setSource] = useState<'api' | 'demo'>('demo');
+  const [source, setSource] = useState<'api' | 'error'>('error');
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile>(defaultProfile);
   const [frequency, setFrequency] = useState('Diario');
@@ -27,8 +27,7 @@ export default function App() {
     setLoading(true); setError('');
     const result = await getJobs(q, email);
     setJobs(result.jobs); setSource(result.source); setLoading(false);
-    if (API_URL && result.source === 'demo') setError('No fue posible consultar el backend JobIA. Se mantiene la vista demo; no se ejecuta matching local de producción.');
-    if (!API_URL) setError('Backend no configurado: define VITE_JOBIA_API_URL en el entorno de producción.');
+    if (result.source === 'error') setError(result.error || 'No se pudo conectar con el backend JobIA. Comprueba la configuración y vuelve a intentarlo.');
   };
 
   useEffect(() => {
@@ -40,7 +39,7 @@ export default function App() {
   const navigate = (next: Section) => { setSection(next); setMobileOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const savedJobs = useMemo(() => jobs.filter(j => savedIds.includes(j.id)), [jobs, savedIds]);
   const saveToggle = (id: string) => setSavedIds(toggleSaved(id));
-  const saveProfileRemote = async () => { persistProfile(profile); const ok = await saveProfile(profile); setSavedNotice(ok || !API_URL); if (ok && API_URL) void load(query, profile.email); setTimeout(() => setSavedNotice(false), 2200); };
+  const saveProfileRemote = async () => { persistProfile(profile); const ok = await saveProfile(profile); setSavedNotice(ok); if (ok && API_URL) void load(query, profile.email); setTimeout(() => setSavedNotice(false), 2200); };
   const prepare = async (job: Job) => { if (!API_URL) return null; const drafts = await prepareApplicationRemote(job.id, profile); if (!drafts) return null; saveApplication(job, 'preparando', drafts); setApplications(loadApplications()); return drafts; };
 
   return <div className="app-shell">
