@@ -2,7 +2,7 @@ export type MatchReason = { skill: string; matched: boolean };
 export type Job = { id: string; title: string; company: string; location: string; modality: string; kind: string; match: number; compensation?: string; summary: string; url?: string; skills?: string[]; match_reasons?: MatchReason[]; strengths?: string[]; gaps?: string[] };
 export type Profile = { email: string; profession: string; mode: string; aiOpportunities: boolean; skills?: string[] };
 export type JobsResponse = Job[] | { jobs?: Job[]; data?: Job[]; results?: Job[] };
-export type JobIAContract = { name: string; module: string; specialization: string; orchestrator: string; trainer: string; clients: string[]; principle: string };
+export type JobIAContract = { name: string; module: string; parent_system: string; specialization: string; host_channel: string; trainer: { module: string; direction: string; purpose: string } | string; clients: string[]; principle: string };
 export type JobIAStatus = { status: string; service?: string; version?: string; contract?: string; persistence?: string };
 export type ApplicationDrafts = { cvSummary: string; coverLetter: string; answers: string; notes: string };
 
