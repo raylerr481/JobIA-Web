@@ -6,20 +6,12 @@ export type JobIAContract = { name: string; module: string; specialization: stri
 export type JobIAStatus = { status: string; service?: string; version?: string; contract?: string; persistence?: string };
 export type ApplicationDrafts = { cvSummary: string; coverLetter: string; answers: string; notes: string };
 
-// Public backend origin; VITE_JOBIA_API_URL can override it per deployment.
-// Production has a safe default so a missing build-time variable cannot silently
-// turn the deployed application into a demo-only experience.
-const API_URL = ((import.meta.env.VITE_JOBIA_API_URL as string | undefined) || 'https://jobia-api.onrender.com').replace(/\/$/, '');
-const REQUEST_TIMEOUT_MS = 9000;
-
-const demoJobs: Job[] = [
-  { id: 'demo-1', title: 'AI Response Evaluator', company: 'JobIA Network', location: 'Brasil', modality: 'Remoto', kind: 'Human-in-the-loop', match: 94, summary: 'Evalúe respuestas de IA usando su conocimiento técnico y criterios de calidad.', skills: ['IA', 'Evaluación', 'Portugués', 'Pensamiento crítico'] },
-  { id: 'demo-2', title: 'Soporte técnico remoto', company: 'JobIA Network', location: 'Brasil', modality: 'Remoto', kind: 'Tiempo completo', match: 89, summary: 'Atendimento e resolução de problemas para usuários e ambientes de tecnologia.', skills: ['Soporte', 'Windows', 'Redes', 'Atención al cliente'] },
-  { id: 'demo-3', title: 'Analista de datos junior', company: 'JobIA Network', location: 'Brasil', modality: 'Híbrido', kind: 'Contrato', match: 84, summary: 'Análise, limpeza e interpretação de dados para apoiar decisões de negócio.', skills: ['Python', 'SQL', 'Excel', 'Datos'] },
-];
+// Configure this to the real JobIA API service in the Cloudflare Pages/Workers build settings.
+const API_URL = ((import.meta.env.VITE_JOBIA_API_URL as string | undefined) || 'https://jobia-api.onrender.com').trim().replace(/\/$/, '');
+const REQUEST_TIMEOUT_MS = 12000;
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  if (!API_URL) throw new Error('JobIA API no configurada');
+  if (!API_URL) throw new Error('JobIA API no configurada: define VITE_JOBIA_API_URL.');
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const callerSignal = options?.signal;
@@ -29,32 +21,27 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
       signal: controller.signal,
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
+      headers: { Accept: 'application/json', ...(options?.body ? { 'Content-Type': 'application/json' } : {}), ...(options?.headers ?? {}) },
     });
     if (!response.ok) throw new Error(`JobIA API: HTTP ${response.status}`);
+    if (response.status === 204) return undefined as T;
     return await response.json() as T;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new Error('El backend JobIA agotó el tiempo de espera.');
+    throw error;
   } finally {
     globalThis.clearTimeout(timeout);
     callerSignal?.removeEventListener('abort', abortFromCaller);
   }
 }
 
-function filterDemo(query: string) {
-  const q = query.trim().toLowerCase();
-  if (!q) return demoJobs;
-  return demoJobs.filter((j) => `${j.title} ${j.company} ${j.kind} ${j.summary} ${j.location} ${j.modality} ${(j.skills ?? []).join(' ')}`.toLowerCase().includes(q));
-}
-
 function normalizeJobs(data: JobsResponse): Job[] {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data.jobs)) return data.jobs;
-  if (Array.isArray(data.data)) return data.data;
-  if (Array.isArray(data.results)) return data.results;
-  return [];
+  const rows = Array.isArray(data) ? data : Array.isArray(data.jobs) ? data.jobs : Array.isArray(data.data) ? data.data : Array.isArray(data.results) ? data.results : [];
+  return rows.filter((job) => job && typeof job.id === 'string' && typeof job.title === 'string')
+    .map((job) => ({ ...job, match: Number.isFinite(Number(job.match)) ? Math.max(0, Math.min(100, Number(job.match))) : 0 }));
 }
 
-export async function getJobs(query = '', email = ''): Promise<{ jobs: Job[]; source: 'api' | 'demo' }> {
-  if (!API_URL) return { jobs: filterDemo(query), source: 'demo' };
+export async function getJobs(query = '', email = ''): Promise<{ jobs: Job[]; source: 'api' | 'error'; error?: string }> {
   try {
     const params = new URLSearchParams();
     if (query.trim()) params.set('q', query.trim());
@@ -62,42 +49,38 @@ export async function getJobs(query = '', email = ''): Promise<{ jobs: Job[]; so
     const suffix = params.toString() ? `?${params.toString()}` : '';
     const data = await request<JobsResponse>(`/jobs${suffix}`);
     return { jobs: normalizeJobs(data), source: 'api' };
-  } catch {
-    // Production must fail closed: never present synthetic/demo opportunities as
-    // real JobIA matches when the authoritative backend is unavailable.
-    return { jobs: [], source: 'demo' };
+  } catch (error) {
+    return { jobs: [], source: 'error', error: error instanceof Error ? error.message : 'No se pudo conectar con el backend JobIA.' };
   }
 }
 
 export async function getProfile(email: string): Promise<Profile | null> {
   const normalizedEmail = email.trim();
-  if (!API_URL || !normalizedEmail) return null;
+  if (!normalizedEmail) return null;
   try { return await request<Profile>(`/profile?email=${encodeURIComponent(normalizedEmail)}`); } catch { return null; }
 }
 
 export async function saveProfile(profile: Profile): Promise<boolean> {
-  if (!API_URL) return true;
+  if (!profile.email.trim()) return false;
   try { await request<Profile>('/profile', { method: 'PUT', body: JSON.stringify(profile) }); return true; } catch { return false; }
 }
 
 export async function getJob(jobId: string, email = ''): Promise<Job | null> {
-  if (!API_URL || !jobId) return null;
+  if (!jobId) return null;
   try { return await request<Job>(`/jobs/${encodeURIComponent(jobId)}${email ? `?email=${encodeURIComponent(email)}` : ''}`); } catch { return null; }
 }
 
 export async function prepareApplicationRemote(jobId: string, profile: Profile): Promise<ApplicationDrafts | null> {
-  if (!API_URL || !jobId) return null;
+  if (!jobId) return null;
   try { return await request<ApplicationDrafts>('/applications/prepare', { method: 'POST', body: JSON.stringify({ job_id: jobId, profile }) }); } catch { return null; }
 }
 
 export async function getContract(): Promise<JobIAContract | null> {
-  if (!API_URL) return null;
   try { return await request<JobIAContract>('/api/v1/contract'); } catch { return null; }
 }
 
 export async function getHealth(): Promise<JobIAStatus | null> {
-  if (!API_URL) return null;
   try { return await request<JobIAStatus>('/health'); } catch { return null; }
 }
 
-export { API_URL, demoJobs };
+export { API_URL };
